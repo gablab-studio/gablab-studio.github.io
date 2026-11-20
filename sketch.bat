@@ -7,14 +7,16 @@ rem        sketch cpp      -> C++  (gabcode.cpp)
 rem        sketch canc     -> cancella tutto (vedi sotto)
 rem
 rem  Nel ciclo:  Invio   = compila ed esegui
+rem              debug   = compila in debug e apri RAD Debugger
 rem              persist = salva lo sketch come progetto vero
 rem              canc    = cancella gabcode, toolchain, build dei progetti, sketch.bat
 rem              esci    = chiudi
 rem
-rem  La toolchain la gestisce toolchain.bat (stesso repo).
+rem  La toolchain la gestisce toolchain.bat, il debugger debugger.bat (stesso repo).
 rem ==================================================================
 setlocal
 set "TCURL=https://gablab-studio.github.io/toolchain.bat"
+set "DBGURL=https://gablab-studio.github.io/debugger.bat"
 set "MODE=%~1"
 if "%MODE%"=="" set "MODE=c99"
 set "WORK=%USERPROFILE%\gabcode"
@@ -68,9 +70,10 @@ set "INLOOP=1"
 
 :build
 echo.
-echo ---- Salva con Ctrl+S, poi:  [Invio] compila   persist   canc   esci ----
+echo ---- Salva con Ctrl+S, poi:  [Invio] compila   debug   persist   canc   esci ----
 set "SCELTA="
 set /p "SCELTA=> "
+if /i "%SCELTA%"=="debug" goto debug
 if /i "%SCELTA%"=="persist" goto persist
 if /i "%SCELTA%"=="canc" goto canc
 if /i "%SCELTA%"=="esci" exit /b 0
@@ -83,6 +86,23 @@ echo ==== Avvio gabcode.exe  [Ctrl+C per fermarlo, poi rispondi N] ====
 gabcode.exe
 echo.
 echo ==== gabcode.exe terminato (codice %errorlevel%) ====
+goto build
+
+rem ------------------------------------------------------------------
+:debug
+%CC% %STDFLAG% -Wall -Wextra -g -gcodeview -O0 -static "%SRC%" -o gabcode.exe -Wl,--pdb=
+if errorlevel 1 (
+    echo ==== Errori di compilazione: correggi in Notepad e riprova ====
+    goto build
+)
+call :finddbg
+if not defined RDBG call :getdbg
+if not defined RDBG (
+    echo [ERRORE] Debugger non disponibile.
+    goto build
+)
+echo ==== Apro gabcode.exe in RAD Debugger: chiudilo per tornare qui ====
+start "" /wait "%RDBG%" gabcode.exe
 goto build
 
 rem ------------------------------------------------------------------
@@ -119,7 +139,7 @@ echo.
 echo ==== Progetto creato: %PDIR% ====
 echo   src\%MAINF%      il tuo codice
 echo   src\%UNITY%     unity build: include main e gli altri file
-echo   build.bat     compila in build\%PNAME%.exe
+echo   build.bat     compila in build\%PNAME%.exe   (build debug = compila e apri il debugger)
 echo   .vscode\      build (Ctrl+Shift+B) e debug (F5) in VS Code
 echo Chiudi Notepad SENZA salvare: il file ora vive in src\%MAINF%.
 start "" explorer "%PDIR%"
@@ -175,7 +195,20 @@ set "B=%PDIR%\build.bat"
 >>"%B%" echo %CC% src\%UNITY% %%compilerFlags%% -o build\%%assembly%%.exe %%defines%% %%includeFlags%% %%linkerFlags%%
 >>"%B%" echo IF ERRORLEVEL 1 GOTO :fail
 >>"%B%" echo ECHO OK: build\%%assembly%%.exe
+>>"%B%" echo IF /I "%%~1"=="debug" GOTO :debug
 >>"%B%" echo EXIT /B 0
+>>"%B%" echo.
+>>"%B%" echo :debug
+>>"%B%" echo CALL :findd
+>>"%B%" echo IF NOT DEFINED RDBG CALL :installd
+>>"%B%" echo IF NOT DEFINED RDBG GOTO :nodbg
+>>"%B%" echo ECHO Apro build\%%assembly%%.exe in RAD Debugger...
+>>"%B%" echo START "" "%%RDBG%%" build\%%assembly%%.exe
+>>"%B%" echo EXIT /B 0
+>>"%B%" echo.
+>>"%B%" echo :nodbg
+>>"%B%" echo ECHO [ERRORE] Debugger non disponibile.
+>>"%B%" echo EXIT /B 1
 >>"%B%" echo.
 >>"%B%" echo :fail
 >>"%B%" echo ECHO Build fallita.
@@ -188,6 +221,19 @@ set "B=%PDIR%\build.bat"
 >>"%B%" echo :find
 >>"%B%" echo SET "DK="
 >>"%B%" echo FOR /D %%%%d IN ("%%LOCALAPPDATA%%\llvm-mingw-*") DO IF EXIST "%%%%d\bin\clang.exe" SET "DK=%%%%d"
+>>"%B%" echo EXIT /B 0
+>>"%B%" echo.
+>>"%B%" echo :findd
+>>"%B%" echo SET "RDBG="
+>>"%B%" echo IF EXIST "%%LOCALAPPDATA%%\raddbg" FOR /R "%%LOCALAPPDATA%%\raddbg" %%%%f IN (raddbg.exe) DO IF EXIST "%%%%f" SET "RDBG=%%%%f"
+>>"%B%" echo EXIT /B 0
+>>"%B%" echo.
+>>"%B%" echo :installd
+>>"%B%" echo ECHO Debugger non trovato, lo scarico...
+>>"%B%" echo curl -fsSL -o "%%TEMP%%\debugger.bat" %DBGURL%
+>>"%B%" echo IF ERRORLEVEL 1 EXIT /B 1
+>>"%B%" echo CALL "%%TEMP%%\debugger.bat"
+>>"%B%" echo CALL :findd
 >>"%B%" echo EXIT /B 0
 >>"%B%" echo.
 >>"%B%" echo :install
@@ -255,6 +301,7 @@ echo.
 echo Verranno cancellati DEFINITIVAMENTE (niente Cestino):
 echo   - la cartella %WORK% con tutto il contenuto
 echo   - la toolchain in %LOCALAPPDATA%\llvm-mingw-*
+echo   - il debugger in %LOCALAPPDATA%\raddbg
 echo   - il contenuto delle cartelle build dei progetti (il codice resta)
 echo   - questo script: %~f0
 echo Chiudi prima Notepad se ha modifiche non salvate che ti servono.
@@ -267,6 +314,8 @@ if errorlevel 2 (
 cd /d "%USERPROFILE%"
 if exist "%WORK%" rmdir /s /q "%WORK%"
 for /d %%d in ("%LOCALAPPDATA%\llvm-mingw-*") do rmdir /s /q "%%d"
+if exist "%LOCALAPPDATA%\raddbg" rmdir /s /q "%LOCALAPPDATA%\raddbg"
+if exist "%APPDATA%\raddbg" rmdir /s /q "%APPDATA%\raddbg"
 for /d %%p in ("C:\DEV\progetti\*" "%USERPROFILE%\DEV\progetti\*") do if exist "%%p\build" (
     rmdir /s /q "%%p\build"
     mkdir "%%p\build"
@@ -275,8 +324,11 @@ for /d %%p in ("C:\DEV\progetti\*" "%USERPROFILE%\DEV\progetti\*") do if exist "
 if exist "%TEMP%\llvm-mingw-x" rmdir /s /q "%TEMP%\llvm-mingw-x" >nul 2>&1
 del "%TEMP%\llvm-mingw.zip" >nul 2>&1
 del "%TEMP%\toolchain.bat" >nul 2>&1
+del "%TEMP%\debugger.bat" >nul 2>&1
+del "%TEMP%\raddbg.zip" >nul 2>&1
 if exist "%WORK%" echo [!] Non sono riuscito a cancellare %WORK% del tutto (file aperto?).
 for /d %%d in ("%LOCALAPPDATA%\llvm-mingw-*") do echo [!] Non sono riuscito a cancellare %%d del tutto.
+if exist "%LOCALAPPDATA%\raddbg" echo [!] Non sono riuscito a cancellare %LOCALAPPDATA%\raddbg (debugger aperto?).
 echo Pulizia completata. Cancello anche sketch.bat e chiudo.
 rem l'ultima riga cancella lo script stesso mentre termina
 (goto) 2>nul & del "%~f0"
@@ -291,4 +343,15 @@ exit /b 0
 echo Toolchain non trovata: scarico toolchain.bat...
 curl -fsSL -o "%TEMP%\toolchain.bat" %TCURL% || exit /b 1
 call "%TEMP%\toolchain.bat"
+exit /b 0
+
+:finddbg
+set "RDBG="
+if exist "%LOCALAPPDATA%\raddbg" for /r "%LOCALAPPDATA%\raddbg" %%f in (raddbg.exe) do if exist "%%f" set "RDBG=%%f"
+exit /b 0
+
+:getdbg
+echo Debugger non trovato: scarico debugger.bat...
+curl -fsSL -o "%TEMP%\debugger.bat" %DBGURL% || exit /b 1
+call "%TEMP%\debugger.bat"
 exit /b 0
