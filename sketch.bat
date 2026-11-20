@@ -11,10 +11,10 @@ rem              persist = salva lo sketch come progetto vero
 rem              canc    = cancella gabcode, toolchain, build dei progetti, sketch.bat
 rem              esci    = chiudi
 rem
-rem  La toolchain la gestisce toolchain.bat (repo separata).
+rem  La toolchain la gestisce toolchain.bat (stesso repo).
 rem ==================================================================
 setlocal
-set "TCURL=https://gablab-studio.github.io/toolchain/toolchain.bat"
+set "TCURL=https://gablab-studio.github.io/toolchain.bat"
 set "MODE=%~1"
 if "%MODE%"=="" set "MODE=c99"
 set "WORK=%USERPROFILE%\gabcode"
