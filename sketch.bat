@@ -27,18 +27,21 @@ if /i "%MODE%"=="cpp" (
     set "CC=clang++"
     set "STDFLAG=-std=c++17"
     set "UNITY=unity.cpp"
+    set "MAINF=main.cpp"
     set "CSTD=c99"
 ) else if /i "%MODE%"=="c89" (
     set "SRC=gabcode.c"
     set "CC=clang"
     set "STDFLAG=-std=c89 -pedantic"
     set "UNITY=unity.c"
+    set "MAINF=main.c"
     set "CSTD=c89"
 ) else (
     set "SRC=gabcode.c"
     set "CC=clang"
     set "STDFLAG=-std=c99"
     set "UNITY=unity.c"
+    set "MAINF=main.c"
     set "CSTD=c99"
 )
 
@@ -106,17 +109,19 @@ if exist "%PDIR%" (
     goto build
 )
 mkdir "%PDIR%\src" "%PDIR%\build" "%PDIR%\.vscode"
-move /y "%WORK%\%SRC%" "%PDIR%\src\%UNITY%" >nul
+move /y "%WORK%\%SRC%" "%PDIR%\src\%MAINF%" >nul
+call :write_unity
 if exist "%WORK%\gabcode.exe" del "%WORK%\gabcode.exe"
 call :write_build
 call :write_vscode
 >"%PDIR%\.gitignore" echo build/
 echo.
 echo ==== Progetto creato: %PDIR% ====
-echo   src\%UNITY%   il tuo codice
+echo   src\%MAINF%      il tuo codice
+echo   src\%UNITY%     unity build: include main e gli altri file
 echo   build.bat     compila in build\%PNAME%.exe
 echo   .vscode\      build (Ctrl+Shift+B) e debug (F5) in VS Code
-echo Chiudi Notepad SENZA salvare: il file ora vive in src\%UNITY%.
+echo Chiudi Notepad SENZA salvare: il file ora vive in src\%MAINF%.
 start "" explorer "%PDIR%"
 where code >nul 2>&1 && start "" code "%PDIR%"
 exit /b 0
@@ -135,6 +140,12 @@ set "ROOT=%USERPROFILE%\DEV\progetti"
 if not exist "%ROOT%" mkdir "%ROOT%" >nul 2>&1
 if exist "%ROOT%" exit /b 0
 set "ROOT="
+exit /b 0
+
+rem --- genera il file della unity build ---
+:write_unity
+set "U=%PDIR%\src\%UNITY%"
+>"%U%" echo #include "%MAINF%"
 exit /b 0
 
 rem --- genera build.bat del progetto ---
