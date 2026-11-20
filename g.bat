@@ -13,7 +13,6 @@ rem ==================================================================
 setlocal
 set "MODE=%~1"
 if "%MODE%"=="" set "MODE=c99"
-set "DK=%LOCALAPPDATA%\llvm-mingw"
 set "WORK=%USERPROFILE%\gabcode"
 
 if /i "%MODE%"=="cpp" (set "SRC=gabcode.cpp") else (set "SRC=gabcode.c")
@@ -27,8 +26,12 @@ type nul > "%SRC%"
 start "" notepad "%SRC%"
 
 rem --- compilatore: scaricato solo la prima volta su questo PC ---
-if not exist "%DK%\bin\clang.exe" call :install
-if not exist "%DK%\bin\clang.exe" (
+call :find
+if not defined DK (
+    call :install
+    call :find
+)
+if not defined DK (
     echo [ERRORE] Compilatore non disponibile. Rete o antivirus lo bloccano?
     pause
     exit /b 1
@@ -58,9 +61,17 @@ echo ==== gabcode.exe terminato (codice %errorlevel%) ====
 goto build
 
 rem ------------------------------------------------------------------
+:find
+rem cerca una cartella llvm-mingw-*-ucrt-x86_64 gia' estratta
+set "DK="
+for /d %%d in ("%LOCALAPPDATA%\llvm-mingw-*") do if exist "%%d\bin\clang.exe" set "DK=%%d"
+exit /b 0
+
 :install
 echo Scarico llvm-mingw (clang/clang++), solo la prima volta su questo PC...
 echo (oltre 100 MB, puo' richiedere qualche minuto: intanto scrivi!)
+rem resti di un tentativo precedente
+if exist "%TEMP%\llvm-mingw-x" rmdir /s /q "%TEMP%\llvm-mingw-x" >nul 2>&1
 set "URL="
 for /f "usebackq delims=" %%u in (`powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol='Tls12'; (Invoke-RestMethod 'https://api.github.com/repos/mstorsjo/llvm-mingw/releases/latest').assets | Where-Object { $_.name -like 'llvm-mingw-*-ucrt-x86_64.zip' } | Select-Object -First 1 -ExpandProperty browser_download_url"`) do set "URL=%%u"
 if not defined URL (
@@ -69,12 +80,8 @@ if not defined URL (
 )
 echo %URL%
 curl -L --fail -o "%TEMP%\llvm-mingw.zip" "%URL%" || exit /b 1
-echo Estraggo...
-set "TMPX=%TEMP%\llvm-mingw-x"
-if exist "%TMPX%" rmdir /s /q "%TMPX%"
-mkdir "%TMPX%"
-tar -xf "%TEMP%\llvm-mingw.zip" -C "%TMPX%" || exit /b 1
-for /d %%d in ("%TMPX%\llvm-mingw-*") do move "%%d" "%DK%" >nul
-rmdir /s /q "%TMPX%" >nul 2>&1
+echo Estraggo in %LOCALAPPDATA% ...
+rem estrazione diretta, senza spostare cartelle (l'antivirus le blocca)
+tar -xf "%TEMP%\llvm-mingw.zip" -C "%LOCALAPPDATA%" || exit /b 1
 del "%TEMP%\llvm-mingw.zip" >nul 2>&1
 exit /b 0
